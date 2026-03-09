@@ -5,25 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-)
 
-func ensureDir(dn string) error {
-	st, err := os.Stat(dn)
-	if err == nil {
-		if !st.IsDir() {
-			return fmt.Errorf("%w: %s exists and is not a directory", os.ErrExist, dn)
-		}
-		return nil
-	}
-	if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("can't stat %s: %w", dn, err)
-	}
-	err = os.MkdirAll(dn, 0775)
-	if err != nil {
-		return fmt.Errorf("can't mkdir %s: %w", dn, err)
-	}
-	return nil
-}
+	"github.com/rclancey/ensuredir"
+)
 
 type TempFile struct {
 	*os.File
@@ -32,7 +16,7 @@ type TempFile struct {
 }
 
 func Create(fn string) (*TempFile, error) {
-	err := ensureDir(filepath.Dir(fn))
+	err := ensuredir.EnsureDir(filepath.Dir(fn))
 	if err != nil {
 		return nil, err
 	}
