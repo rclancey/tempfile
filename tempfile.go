@@ -1,8 +1,8 @@
 package tempfile
 
 import (
-	"errors"
-	"fmt"
+	"encoding/hex"
+	"hash"
 	"os"
 	"path/filepath"
 
@@ -13,22 +13,40 @@ type TempFile struct {
 	*os.File
 	realFn string
 	tempFn string
+	hash hash.Hash
 }
 
-func Create(fn string) (*TempFile, error) {
+type Option func(tf *TempFile) error
+
+func WithHash(h hash.Hash) Option {
+	return func(tf *TempFile) error {
+		tf.hash = h
+		return nil
+	}
+}
+
+func Create(fn string, opts ...Option) (*TempFile, error) {
 	err := ensuredir.EnsureDir(filepath.Dir(fn))
 	if err != nil {
 		return nil, err
 	}
-	tf, err := os.CreateTemp(filepath.Dir(fn), "."+filepath.Base(fn)+"*.tmp")
+	f, err := os.CreateTemp(filepath.Dir(fn), "."+filepath.Base(fn)+"*.tmp")
 	if err != nil {
 		return nil, err
 	}
-	return &TempFile{
-		File: tf,
+	tf := &TempFile{
+		File: f,
 		realFn: fn,
-		tempFn: tf.Name(),
-	}, nil
+		tempFn: f.Name(),
+	}
+	for _, opt := range opts {
+		err = opt(tf)
+		if err != nil {
+			tf.Abandon()
+			return nil, err
+		}
+	}
+	return tf, nil
 }
 
 func (tf *TempFile) Abandon() error {
@@ -48,4 +66,23 @@ func (tf *TempFile) Close() error {
 		return err
 	}
 	return nil
+}
+
+func (tf *TempFile) Write(buf []byte) (int, error) {
+	n, err := tf.File.Write(buf)
+	if tf.hash != nil {
+		tf.hash.Write(buf[:n])
+	}
+	return n, err
+}
+
+func (tf *TempFile) Hash() []byte {
+	if tf.hash == nil {
+		return nil
+	}
+	return tf.hash.Sum(nil)
+}
+
+func (tf *TempFile) HexHash() string {
+	return hex.EncodeToString(tf.Hash())
 }
