@@ -2,7 +2,9 @@ package tempfile
 
 import (
 	"encoding/hex"
+	"errors"
 	"hash"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -74,6 +76,27 @@ func (tf *TempFile) Write(buf []byte) (int, error) {
 		tf.hash.Write(buf[:n])
 	}
 	return n, err
+}
+
+func (tf *TempFile) ReadFrom(r io.Reader) (int64, error) {
+	buf := make([]byte, 65536)
+	var written int64
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			wn, werr := tf.Write(buf[:n])
+			written += int64(wn)
+			if werr != nil {
+				return written, werr
+			}
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				return written, nil
+			}
+			return written, err
+		}
+	}
 }
 
 func (tf *TempFile) Hash() []byte {
